@@ -5,6 +5,8 @@ trigger:
 jobs:
 - deployment: deploy_logicapp_resources
   displayName: Deploy Logic App Resources
+  pool:
+    vmImage: ubuntu-18.04  
   environment: 'dev'
   variables:
     deploymentMode: 'Incremental'
