@@ -1,0 +1,34 @@
+# IaC Logic App resources deployment template
+trigger:
+- main
+
+jobs:
+- deployment: deploy_logicapp_resources
+  displayName: Deploy Logic App Resources
+  environment: 'dev'
+  variables:
+    deploymentMode: 'Incremental'
+    environment: 'dev'
+  strategy:
+    runOnce:
+      deploy:
+        steps:
+        - download: current
+          artifact: $(artifactName)
+
+        - task: AzureResourceGroupDeployment@2
+          displayName: 'Deploy Logic App'
+          inputs:
+            azureSubscription: 'ca543220-3d63-4b72-a9a0-4b43f15707ff'
+            resourceGroupName: $(resourceGroupName)
+            location: $(resourceGroupLocation)
+            csmFile: '$(Pipeline.Workspace)/$(artifactName)/template.json'
+            overrideParameters: '
+              -location $(resourceGroupLocation)
+              -environmentName $(environment)
+              -projectName $(projectName)
+              -logicAppName $(logicAppName)
+              -appServicePlanName $(appServicePlanName)
+              -storageName $(storageName)'
+            deploymentMode: $(deploymentMode)
+            deploymentOutputs: 'LogicAppArmOutputs'
