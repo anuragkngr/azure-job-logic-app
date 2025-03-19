@@ -14,21 +14,19 @@ jobs:
       deploy:
         steps:
         - download: current
-          artifact: $(artifactName)
+          # artifact: $(artifactName)
 
         - task: AzureResourceGroupDeployment@2
           displayName: 'Deploy Logic App'
           inputs:
             azureSubscription: 'ca543220-3d63-4b72-a9a0-4b43f15707ff'
-            resourceGroupName: $(resourceGroupName)
-            location: $(resourceGroupLocation)
-            csmFile: '$(Pipeline.Workspace)/$(artifactName)/template.json'
-            overrideParameters: '
-              -location $(resourceGroupLocation)
+            resourceGroupName: 'rg-test'
+            location: 'eastus'
+            csmFile: '$(Pipeline.Workspace)/template.json'
+            overrideParameters:
+              -location eastus
               -environmentName $(environment)
-              -projectName $(projectName)
-              -logicAppName $(logicAppName)
-              -appServicePlanName $(appServicePlanName)
-              -storageName $(storageName)'
+              -projectName azure-job-logic-app
+              -logicAppName my-logic
             deploymentMode: $(deploymentMode)
-            deploymentOutputs: 'LogicAppArmOutputs'
+            deploymentOutputs: LogicAppArmOutputs
