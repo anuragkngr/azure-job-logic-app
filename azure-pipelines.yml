@@ -5,6 +5,7 @@ trigger:
 jobs:
 - deployment: deploy_logicapp_resources
   displayName: Deploy Logic App Resources
+  pool: 'Azure Pipelines'   
   environment: 'dev'
   variables:
     deploymentMode: 'Incremental'
