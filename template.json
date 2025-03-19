@@ -1,0 +1,476 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workflows_test_logic_app_name": {
+            "defaultValue": "test-logic-app",
+            "type": "String"
+        },
+        "connections_azuretables_4_externalid": {
+            "defaultValue": "/subscriptions/ca543220-3d63-4b72-a9a0-4b43f15707ff/resourceGroups/rg-data-processing/providers/Microsoft.Web/connections/azuretables-4",
+            "type": "String"
+        }
+    },
+    "variables": {},
+    "resources": [
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('workflows_test_logic_app_name')]",
+            "location": "eastus",
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "rate": {
+                            "defaultValue": {
+                                "rate": [
+                                    {
+                                        "rate": 0.0115,
+                                        "FROM": "INR",
+                                        "TO": "USD"
+                                    },
+                                    {
+                                        "rate": 0.010569,
+                                        "FROM": "INR",
+                                        "TO": "EUR"
+                                    },
+                                    {
+                                        "rate": 0.008892,
+                                        "FROM": "INR",
+                                        "TO": "GBP"
+                                    },
+                                    {
+                                        "rate": 1.709184,
+                                        "FROM": "INR",
+                                        "TO": "YEN"
+                                    },
+                                    {
+                                        "rate": 0.018189,
+                                        "FROM": "INR",
+                                        "TO": "AUD"
+                                    }
+                                ]
+                            },
+                            "type": "Object"
+                        },
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "When_a_HTTP_request_is_received": {
+                            "type": "Request",
+                            "kind": "Http"
+                        }
+                    },
+                    "actions": {
+                        "Parse_JSON_rateVar": {
+                            "runAfter": {
+                                "Initialize_variable_payloadVar": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@parameters('rate')",
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "rate": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "rate": {
+                                                        "type": "number"
+                                                    },
+                                                    "FROM": {
+                                                        "type": "string"
+                                                    },
+                                                    "TO": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "rate",
+                                                    "FROM",
+                                                    "TO"
+                                                ]
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "Parse_JSON_body": {
+                            "runAfter": {},
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@triggerBody()",
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "amount": {
+                                            "type": "integer"
+                                        },
+                                        "FROM": {
+                                            "type": "string"
+                                        },
+                                        "TO": {
+                                            "type": "string"
+                                        },
+                                        "VALUE": {
+                                            "type": "string"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "Initialize_variable_payloadVar": {
+                            "runAfter": {
+                                "Parse_JSON_body": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "payloadVar",
+                                        "type": "object",
+                                        "value": "@body('Parse_JSON_body')"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_rateVar": {
+                            "runAfter": {
+                                "Parse_JSON_rateVar": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "rateVar",
+                                        "type": "object",
+                                        "value": "@body('Parse_JSON_rateVar')"
+                                    }
+                                ]
+                            }
+                        },
+                        "Response": {
+                            "runAfter": {
+                                "Condition": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Response",
+                            "kind": "Http",
+                            "inputs": {
+                                "statusCode": 200
+                            }
+                        },
+                        "Condition": {
+                            "actions": {
+                                "For_each": {
+                                    "foreach": "@outputs('Parse_JSON_rateVar')?['body']?['rate']",
+                                    "actions": {
+                                        "Insert_or_Merge_Entity_(V2)": {
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azuretables-2']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "patch",
+                                                "body": {
+                                                    "rate": "@item()?['rate']"
+                                                },
+                                                "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent('AccountNameFromSettings'))}/tables/@{encodeURIComponent('forex')}/entities(PartitionKey='@{encodeURIComponent(item()?['FROM'])}',RowKey='@{encodeURIComponent(item()?['TO'])}')"
+                                            }
+                                        }
+                                    },
+                                    "type": "Foreach"
+                                },
+                                "Response_1": {
+                                    "runAfter": {
+                                        "For_each": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Response",
+                                    "kind": "Http",
+                                    "inputs": {
+                                        "statusCode": 200,
+                                        "body": "@triggerOutputs()?['headers']"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_variable_activityVar": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {
+                                    "Condition_1": {
+                                        "actions": {
+                                            "Get_entities_(V2)": {
+                                                "type": "ApiConnection",
+                                                "inputs": {
+                                                    "host": {
+                                                        "connection": {
+                                                            "name": "@parameters('$connections')['azuretables-2']['connectionId']"
+                                                        }
+                                                    },
+                                                    "method": "get",
+                                                    "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent('AccountNameFromSettings'))}/tables/@{encodeURIComponent('forex')}/entities"
+                                                }
+                                            },
+                                            "Response_2": {
+                                                "runAfter": {
+                                                    "Get_entities_(V2)": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "Response",
+                                                "kind": "Http",
+                                                "inputs": {
+                                                    "statusCode": 200,
+                                                    "body": "@body('Get_entities_(V2)')"
+                                                }
+                                            }
+                                        },
+                                        "else": {
+                                            "actions": {
+                                                "Condition_2": {
+                                                    "actions": {
+                                                        "Parse_JSON_2": {
+                                                            "type": "ParseJson",
+                                                            "inputs": {
+                                                                "content": "@triggerBody()",
+                                                                "schema": {
+                                                                    "type": "object",
+                                                                    "properties": {
+                                                                        "FROM": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "TO": {
+                                                                            "type": "string"
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        },
+                                                        "Get_entity_(V2)": {
+                                                            "runAfter": {
+                                                                "Parse_JSON_2": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "ApiConnection",
+                                                            "inputs": {
+                                                                "host": {
+                                                                    "connection": {
+                                                                        "name": "@parameters('$connections')['azuretables-2']['connectionId']"
+                                                                    }
+                                                                },
+                                                                "method": "get",
+                                                                "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent('AccountNameFromSettings'))}/tables/@{encodeURIComponent('forex')}/entities(PartitionKey='@{encodeURIComponent(body('Parse_JSON_2')?['FROM'])}',RowKey='@{encodeURIComponent(body('Parse_JSON_2')?['TO'])}')"
+                                                            }
+                                                        },
+                                                        "Response_3": {
+                                                            "runAfter": {
+                                                                "Get_entity_(V2)": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "Response",
+                                                            "kind": "Http",
+                                                            "inputs": {
+                                                                "statusCode": 200,
+                                                                "body": "@body('Get_entity_(V2)')"
+                                                            }
+                                                        }
+                                                    },
+                                                    "else": {
+                                                        "actions": {
+                                                            "Parse_JSON_3": {
+                                                                "type": "ParseJson",
+                                                                "inputs": {
+                                                                    "content": "@triggerBody()",
+                                                                    "schema": {
+                                                                        "type": "object",
+                                                                        "properties": {
+                                                                            "amount": {
+                                                                                "type": "integer"
+                                                                            },
+                                                                            "FROM": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "TO": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "VALUE": {
+                                                                                "type": "string"
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }
+                                                            },
+                                                            "Get_entity_(V2)_1": {
+                                                                "runAfter": {
+                                                                    "Parse_JSON_3": [
+                                                                        "Succeeded"
+                                                                    ]
+                                                                },
+                                                                "type": "ApiConnection",
+                                                                "inputs": {
+                                                                    "host": {
+                                                                        "connection": {
+                                                                            "name": "@parameters('$connections')['azuretables-2']['connectionId']"
+                                                                        }
+                                                                    },
+                                                                    "method": "get",
+                                                                    "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent('AccountNameFromSettings'))}/tables/@{encodeURIComponent('forex')}/entities(PartitionKey='@{encodeURIComponent(body('Parse_JSON_3')?['FROM'])}',RowKey='@{encodeURIComponent(body('Parse_JSON_3')?['TO'])}')"
+                                                                }
+                                                            },
+                                                            "Compose": {
+                                                                "runAfter": {
+                                                                    "Parse_JSON_4": [
+                                                                        "Succeeded"
+                                                                    ]
+                                                                },
+                                                                "type": "Compose",
+                                                                "inputs": {
+                                                                    "amount": "@body('Parse_JSON_3')?['amount']",
+                                                                    "FROM": "@body('Parse_JSON_3')?['FROM']",
+                                                                    "TO": "@body('Parse_JSON_3')?['TO']",
+                                                                    "VALUE": "@mul(floot(body('Parse_JSON_4')?['rate']), floot(body('Parse_JSON_3')?['amount']))"
+                                                                }
+                                                            },
+                                                            "Parse_JSON_4": {
+                                                                "runAfter": {
+                                                                    "Get_entity_(V2)_1": [
+                                                                        "Succeeded"
+                                                                    ]
+                                                                },
+                                                                "type": "ParseJson",
+                                                                "inputs": {
+                                                                    "content": "@body('Get_entity_(V2)_1')",
+                                                                    "schema": {
+                                                                        "type": "object",
+                                                                        "properties": {
+                                                                            "PartitionKey": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "RowKey": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "Timestamp": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "rate": {
+                                                                                "type": "number"
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }
+                                                            },
+                                                            "Response_4": {
+                                                                "runAfter": {
+                                                                    "Compose": [
+                                                                        "Succeeded"
+                                                                    ]
+                                                                },
+                                                                "type": "Response",
+                                                                "kind": "Http",
+                                                                "inputs": {
+                                                                    "statusCode": 200,
+                                                                    "body": "@outputs('Compose')"
+                                                                }
+                                                            }
+                                                        }
+                                                    },
+                                                    "expression": {
+                                                        "and": [
+                                                            {
+                                                                "equals": [
+                                                                    "@variables('activityVar')",
+                                                                    "get"
+                                                                ]
+                                                            }
+                                                        ]
+                                                    },
+                                                    "type": "If"
+                                                }
+                                            }
+                                        },
+                                        "expression": {
+                                            "and": [
+                                                {
+                                                    "equals": [
+                                                        "@variables('activityVar')",
+                                                        "getall"
+                                                    ]
+                                                }
+                                            ]
+                                        },
+                                        "type": "If"
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@variables('activityVar')",
+                                            "create"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Initialize_variable_activityVar": {
+                            "runAfter": {
+                                "Initialize_variable_rateVar": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "activityVar",
+                                        "type": "string",
+                                        "value": "@trigger().outputs.headers.activity"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuretables-2": {
+                                "id": "/subscriptions/ca543220-3d63-4b72-a9a0-4b43f15707ff/providers/Microsoft.Web/locations/eastus/managedApis/azuretables",
+                                "connectionId": "[parameters('connections_azuretables_4_externalid')]",
+                                "connectionName": "azuretables-4"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}
